@@ -1,0 +1,6 @@
+Flask
+Flask-SocketIO
+psycopg2
+pandas
+numpy
+Werkzeug

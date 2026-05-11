@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Smart Task Manager</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.5.4/socket.io.min.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Segoe UI', sans-serif; background: #0f172a; color: #e2e8f0; min-height: 100vh; }
+
+        .navbar { background: #1e293b; padding: 15px 30px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #334155; }
+        .navbar h1 { color: #38bdf8; font-size: 22px; }
+        .navbar button { background: #ef4444; color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; }
+
+        .container { max-width: 1100px; margin: 30px auto; padding: 0 20px; }
+
+        /* Auth Section */
+        .auth-section { display: flex; gap: 20px; justify-content: center; margin-bottom: 30px; }
+        .auth-box { background: #1e293b; padding: 30px; border-radius: 12px; width: 320px; border: 1px solid #334155; }
+        .auth-box h2 { color: #38bdf8; margin-bottom: 20px; text-align: center; }
+        .auth-box input { width: 100%; padding: 10px; margin-bottom: 12px; background: #0f172a; border: 1px solid #334155; border-radius: 6px; color: #e2e8f0; }
+        .auth-box button { width: 100%; padding: 10px; background: #0ea5e9; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 15px; }
+        .auth-box button:hover { background: #0284c7; }
+
+        /* Dashboard */
+        .dashboard { display: none; }
+        .analytics { display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px; margin-bottom: 30px; }
+        .stat-card { background: #1e293b; padding: 20px; border-radius: 12px; text-align: center; border: 1px solid #334155; }
+        .stat-card h3 { font-size: 28px; color: #38bdf8; }
+        .stat-card p { color: #94a3b8; font-size: 13px; margin-top: 5px; }
+
+        /* Task Form */
+        .task-form { background: #1e293b; padding: 25px; border-radius: 12px; margin-bottom: 25px; border: 1px solid #334155; }
+        .task-form h2 { color: #38bdf8; margin-bottom: 15px; }
+        .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px; }
+        .task-form input, .task-form textarea, .task-form select {
+            width: 100%; padding: 10px; background: #0f172a; border: 1px solid #334155;
+            border-radius: 6px; color: #e2e8f0;
+        }
+        .task-form textarea { height: 80px; resize: none; }
+        .task-form button { background: #22c55e; color: white; border: none; padding: 10px 25px; border-radius: 6px; cursor: pointer; margin-top: 10px; }
+
+        /* Task List */
+        .task-list h2 { color: #38bdf8; margin-bottom: 15px; }
+        .task-card { background: #1e293b; padding: 18px; border-radius: 10px; margin-bottom: 12px; border: 1px solid #334155; display: flex; justify-content: space-between; align-items: center; }
+        .task-info h3 { color: #f1f5f9; margin-bottom: 5px; }
+        .task-info p { color: #94a3b8; font-size: 13px; }
+        .badges { display: flex; gap: 8px; margin-top: 8px; }
+        .badge { padding: 3px 10px; border-radius: 20px; font-size: 12px; font-weight: 600; }
+        .badge.high { background: #fef2f2; color: #ef4444; }
+        .badge.medium { background: #fefce8; color: #ca8a04; }
+        .badge.low { background: #f0fdf4; color: #22c55e; }
+        .badge.completed { background: #f0fdf4; color: #22c55e; }
+        .badge.pending { background: #fff7ed; color: #f97316; }
+        .task-actions { display: flex; gap: 8px; }
+        .task-actions button { padding: 6px 14px; border: none; border-radius: 6px; cursor: pointer; font-size: 13px; }
+        .btn-complete { background: #22c55e; color: white; }
+        .btn-delete { background: #ef4444; color: white; }
+
+        .message { padding: 10px 15px; border-radius: 6px; margin-bottom: 15px; display: none; }
+        .message.success { background: #dcfce7; color: #166534; }
+        .message.error { background: #fef2f2; color: #991b1b; }
+    </style>
+</head>
+<body>
+
+<div class="navbar">
+    <h1>⚡ Smart Task Manager</h1>
+    <div id="navUser" style="display:none">
+        <span id="welcomeText" style="margin-right:15px; color:#94a3b8;"></span>
+        <button onclick="logout()">Logout</button>
+    </div>
+</div>
+
+<div class="container">
+    <div id="message" class="message"></div>
+
+    <!-- Auth Section -->
+    <div class="auth-section" id="authSection">
+        <div class="auth-box">
+            <h2>🔐 Register</h2>
+            <input type="text" id="regUsername" placeholder="Username">
+            <input type="email" id="regEmail" placeholder="Email">
+            <input type="password" id="regPassword" placeholder="Password">
+            <button onclick="register()">Register</button>
+        </div>
+        <div class="auth-box">
+            <h2>🚀 Login</h2>
+            <input type="email" id="loginEmail" placeholder="Email">
+            <input type="password" id="loginPassword" placeholder="Password">
+            <button onclick="login()">Login</button>
+        </div>
+    </div>
+
+    <!-- Dashboard -->
+    <div class="dashboard" id="dashboard">
+        <!-- Analytics -->
+        <div class="analytics">
+            <div class="stat-card"><h3 id="totalTasks">0</h3><p>Total Tasks</p></div>
+            <div class="stat-card"><h3 id="completedTasks">0</h3><p>Completed</p></div>
+            <div class="stat-card"><h3 id="pendingTasks">0</h3><p>Pending</p></div>
+            <div class="stat-card"><h3 id="completionPct">0%</h3><p>Completion %</p></div>
+        </div>
+
+        <!-- Add Task Form -->
+        <div class="task-form">
+            <h2>➕ Add New Task</h2>
+            <input type="text" id="taskTitle" placeholder="Task Title">
+            <textarea id="taskDesc" placeholder="Description"></textarea>
+            <div class="form-row">
+                <select id="taskPriority">
+                    <option value="high">🔴 High Priority</option>
+                    <option value="medium" selected>🟡 Medium Priority</option>
+                    <option value="low">🟢 Low Priority</option>
+                </select>
+                <select id="taskStatus">
+                    <option value="pending">⏳ Pending</option>
+                    <option value="completed">✅ Completed</option>
+                </select>
+            </div>
+            <button onclick="addTask()">Add Task</button>
+        </div>
+
+        <!-- Task List -->
+        <div class="task-list">
+            <h2>📋 My Tasks</h2>
+            <div id="taskContainer"></div>
+        </div>
+    </div>
+</div>
+
+<script>
+    const socket = io();
+
+    socket.on('connected', (data) => console.log(data.message));
+    socket.on('task_added', () => { loadTasks(); loadAnalytics(); });
+    socket.on('task_updated', () => { loadTasks(); loadAnalytics(); });
+    socket.on('task_deleted', () => { loadTasks(); loadAnalytics(); });
+
+    function showMessage(msg, type) {
+        const el = document.getElementById('message');
+        el.textContent = msg;
+        el.className = `message ${type}`;
+        el.style.display = 'block';
+        setTimeout(() => el.style.display = 'none', 3000);
+    }
+
+    async function register() {
+        const username = document.getElementById('regUsername').value;
+        const email = document.getElementById('regEmail').value;
+        const password = document.getElementById('regPassword').value;
+        const res = await fetch('/register', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({username, email, password})
+        });
+        const data = await res.json();
+        showMessage(data.message, res.ok ? 'success' : 'error');
+    }
+
+    async function login() {
+        const email = document.getElementById('loginEmail').value;
+        const password = document.getElementById('loginPassword').value;
+        const res = await fetch('/login', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({email, password})
+        });
+        const data = await res.json();
+        if (res.ok) {
+            document.getElementById('authSection').style.display = 'none';
+            document.getElementById('dashboard').style.display = 'block';
+            document.getElementById('navUser').style.display = 'flex';
+            document.getElementById('welcomeText').textContent = `Welcome, ${data.username}!`;
+            loadTasks();
+            loadAnalytics();
+        } else {
+            showMessage(data.message, 'error');
+        }
+    }
+
+    async function logout() {
+        await fetch('/logout');
+        document.getElementById('authSection').style.display = 'flex';
+        document.getElementById('dashboard').style.display = 'none';
+        document.getElementById('navUser').style.display = 'none';
+    }
+
+    async function loadTasks() {
+        const res = await fetch('/tasks');
+        const tasks = await res.json();
+        const container = document.getElementById('taskContainer');
+        container.innerHTML = '';
+        tasks.forEach(task => {
+            container.innerHTML += `
+                <div class="task-card">
+                    <div class="task-info">
+                        <h3>${task.title}</h3>
+                        <p>${task.description || 'No description'}</p>
+                        <div class="badges">
+                            <span class="badge ${task.priority}">${task.priority}</span>
+                            <span class="badge ${task.status}">${task.status}</span>
+                        </div>
+                    </div>
+                    <div class="task-actions">
+                        <button class="btn-complete" onclick="completeTask(${task.id}, '${task.title}', '${task.description}', '${task.priority}')">✅ Complete</button>
+                        <button class="btn-delete" onclick="deleteTask(${task.id})">🗑️ Delete</button>
+                    </div>
+                </div>`;
+        });
+    }
+
+    async function addTask() {
+        const title = document.getElementById('taskTitle').value;
+        const description = document.getElementById('taskDesc').value;
+        const priority = document.getElementById('taskPriority').value;
+        const status = document.getElementById('taskStatus').value;
+        if (!title) { showMessage('Please enter task title!', 'error'); return; }
+        const res = await fetch('/tasks', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({title, description, priority, status})
+        });
+        const data = await res.json();
+        showMessage(data.message, 'success');
+        document.getElementById('taskTitle').value = '';
+        document.getElementById('taskDesc').value = '';
+    }
+
+    async function completeTask(id, title, description, priority) {
+        await fetch(`/tasks/${id}`, {
+            method: 'PUT',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({title, description, priority, status: 'completed'})
+        });
+        showMessage('Task completed!', 'success');
+    }
+
+    async function deleteTask(id) {
+        await fetch(`/tasks/${id}`, {method: 'DELETE'});
+        showMessage('Task deleted!', 'success');
+    }
+
+    async function loadAnalytics() {
+        const res = await fetch('/analytics');
+        const data = await res.json();
+        document.getElementById('totalTasks').textContent = data.total_tasks;
+        document.getElementById('completedTasks').textContent = data.completed_tasks;
+        document.getElementById('pendingTasks').textContent = data.pending_tasks;
+        document.getElementById('completionPct').textContent = data.completion_percentage + '%';
+    }
+</script>
+</body>
+</html>
